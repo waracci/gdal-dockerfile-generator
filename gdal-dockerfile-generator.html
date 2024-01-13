@@ -1,0 +1,315 @@
+<!--
+
+    1. Show dockerfile content and only update the versions upon select change
+    2. dockerfile syntax highlighting
+    3. Instructions on how to run
+    4. How can I automate testing all combinations of dockerfiles?
+ -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dockerfile Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f3f3f3;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            margin: 0;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .container {
+            background-color: #dadff3;
+            color: #000;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-top: 16px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        select {
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        .button {
+            padding: 10px 20px;
+            margin-top: 20px;
+            font-size: 16px;
+            background-color: #4caf50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #copyButton {
+            float: right;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container text-center">
+        <h1>Dockerfile Generator</h1>
+        <label for="ubuntuVersion">Select ubuntu version:</label>
+        <select name="ubuntuVersionDropDown" id="ubuntuVersionDropDown"></select>
+        <br>
+        <label for="gdalVersion">Select GDAL version:</label>
+        <select name="gdalVersionDropDown" id="gdalVersionDropDown"></select>
+        <br>
+        <label for="pythonVersion">Select Python version:</label>
+        <select name="pythonVersionDropDown" id="pythonVersionDropDown"></select>
+        <br>
+        <button id="generateDockerfile" class="button">Generate Dockerfile</button>
+    </div>
+    <div class="container output">
+        <button id="copyButton">Copy</button>
+        <div id="outputText">
+        </div>
+    </div>
+    <script>
+        // https://stackoverflow.com/a/33928558
+        // Copies a string to the clipboard. Must be called from within an
+        // event handler such as click. May return false if it failed, but
+        // this is not always possible. Browser support for Chrome 43+,
+        // Firefox 42+, Safari 10+, Edge and Internet Explorer 10+.
+        // Internet Explorer: The clipboard feature may be disabled by
+        // an administrator. By default a prompt is shown the first
+        // time the clipboard is used (per session).
+        function copyToClipboard(text) {
+            if (window.clipboardData && window.clipboardData.setData) {
+                // Internet Explorer-specific code path to prevent textarea being shown while dialog is visible.
+                return window.clipboardData.setData("Text", text);
+
+            }
+            else if (document.queryCommandSupported && document.queryCommandSupported("copy")) {
+                var textarea = document.createElement("textarea");
+                textarea.textContent = text;
+                textarea.style.position = "fixed";  // Prevent scrolling to bottom of page in Microsoft Edge.
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    return document.execCommand("copy");  // Security exception may be thrown by some browsers.
+                }
+                catch (ex) {
+                    console.warn("Copy to clipboard failed.", ex);
+                    return prompt("Copy to clipboard: Ctrl+C, Enter", text);
+                }
+                finally {
+                    document.body.removeChild(textarea);
+                }
+            }
+        }
+        const gdalVersions = [
+            "3.8.0",
+            "3.7.3",
+            "3.7.2",
+            "3.7.1",
+            "3.7.0",
+            "3.6.4",
+            "3.6.3",
+            "3.6.2",
+            "3.6.1",
+            "3.6.0",
+            "3.5.3",
+            "3.5.2",
+            "3.5.1",
+            "3.5.0",
+            "3.4.3",
+            "3.4.2",
+            "3.4.1",
+            "3.4.0",
+            "3.3.3",
+            "3.3.2",
+            "3.3.1",
+            "3.2.3",
+            "3.3.0",
+            "3.2.2",
+            "3.2.1",
+            "3.2.0",
+            "3.1.4",
+            "3.1.3",
+            "3.1.2",
+            "3.1.1",
+            "3.1.0",
+            "3.0.4",
+            "3.0.3",
+            "2.4.4",
+            "3.0.2",
+            "3.0.1",
+            "3.0.0"
+        ];
+
+        const gdalSelect = document.getElementById("gdalVersionDropDown");
+        gdalVersions.forEach(version => {
+            const option = document.createElement('option');
+            option.value = version;
+            option.textContent = version;
+            gdalSelect.appendChild(option);
+        });
+
+        const pythonVersions = [
+            "3.10",
+            "3.9",
+            "3.8",
+            "3.7"
+        ]
+
+        const pythonSelect = document.getElementById("pythonVersionDropDown");
+        pythonVersions.forEach(pyVersion => {
+            const option = document.createElement('option');
+            option.value = pyVersion;
+            option.textContent = pyVersion;
+            pythonSelect.appendChild(option);
+        })
+
+        const ubuntuVersions = [
+            "22.04",
+            // "20.04", // gets stuck on "questions will narrow this down by presenting a list of cities, representing the time zones in which they are located."
+            // "18.04" // not yet tested
+        ]
+
+        const ubuntuSelect = document.getElementById("ubuntuVersionDropDown");
+        ubuntuVersions.forEach(ubuntuVersion => {
+            const option = document.createElement('option');
+            option.value = ubuntuVersion;
+            option.textContent = ubuntuVersion;
+            ubuntuSelect.appendChild(option);
+        })
+
+        document.getElementById('generateDockerfile').addEventListener('click', function () {
+            let ubuntuVersion = document.getElementById("ubuntuVersionDropDown")
+            let gdalVersion = document.getElementById("gdalVersionDropDown")
+            let pythonVersion = document.getElementById("pythonVersionDropDown")
+            let projVersion = "9.3.0";
+            let defaultTimezone = "UTC";
+            let PYTHONPATH = "$(pwd)"
+            var dockerfileContentArr = [
+[`ARG UBUNTU_VERSION=${ubuntuVersion.value} `],
+[`FROM ubuntu:\${UBUNTU_VERSION} `],
+[` `],
+[`# FROM directive resets ARGS, so we specify again here `],
+[`ARG PYTHON_VERSION=${pythonVersion.value} `],
+[`ARG GDAL_VERSION=${gdalVersion.value} `],
+[`ARG PROJ_VERSION=${projVersion} `],
+[`ARG DEFAULT_TIMEZONE=${defaultTimezone} `],
+[` `],
+[`# Set default shell to bash `],
+[`SHELL ["/bin/bash", "-c"] `],
+[` `],
+[`RUN apt update -y && apt upgrade -y `],
+[` `],
+[`RUN apt install -y \\ `],
+[`wget \\ `],
+[`cmake build-essential \\ `],
+[`libtiff-dev \\ `],
+[`curl \\ `],
+[`libcurl4-openssl-dev \\ `],
+[`libgeos-dev `],
+[` `],
+[`# Install GDAL dependencies `],
+[`RUN wget https://sqlite.org/2021/sqlite-autoconf-3340100.tar.gz \\ `],
+[`&& tar -xvf sqlite-autoconf-3340100.tar.gz \\ `],
+[`&& cd sqlite-autoconf-3340100 \\ `],
+[`&& apt-get install -y libreadline-dev \\ `],
+[`&& ./configure \\ `],
+[`&& make \\ `],
+[`&& apt-get purge sqlite3 \\ `],
+[`&& make install \\ `],
+[`&& export PATH="/usr/local/bin:$PATH" `],
+[` `],
+[`# Install Proj: `],
+[`# Proj contains a vast database of coordinate reference systems, `],
+[`# including various projections, datums, and ellipsoids. `],
+[`# GDAL uses Proj to manage and interpret CRS information stored in geospatial datasets. `],
+[`# Proj provides the algorithms and functions necessary for performing accurate `],
+[`# transformations between different coordinate systems `],
+[`RUN wget https://download.osgeo.org/proj/proj-\${PROJ_VERSION}.tar.gz \\ `],
+[`&& tar -xf proj-\${PROJ_VERSION}.tar.gz \\ `],
+[`&& cd proj-\${PROJ_VERSION} \\ `],
+[`&& mkdir build \\ `],
+[`&& cd build \\ `],
+[`&& cmake .. \\ `],
+[`&& cmake --build . \\ `],
+[`&& cmake --build . --target install `],
+[` `],
+[`# Install GDAL `],
+[`RUN wget https://github.com/OSGeo/gdal/releases/download/v\${GDAL_VERSION}/gdal-\${GDAL_VERSION}.tar.gz \\ `],
+[`&& tar -xf gdal-\${GDAL_VERSION}.tar.gz \\ `],
+[`&& cd gdal-\${GDAL_VERSION} \\ `],
+[`&& mkdir build \\ `],
+[`&& cd build \\ `],
+[`&& cmake  -DCMAKE_BUILD_TYPE=Release -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF .. \\ `],
+[`&& cmake --build . \\ `],
+[`&& cmake --build . --target install \\ `],
+[`&& /sbin/ldconfig \\ `],
+[`&& /sbin/ldconfig `],
+[` `],
+[`RUN apt-get  clean \\ `],
+[`&& apt-get install software-properties-common -y \\ `],
+[`&& add-apt-repository ppa:ubuntugis/ppa \\ `],
+[`&& add-apt-repository ppa:deadsnakes/ppa \\ `],
+[`&& apt-get update -y \\ `],
+[`&& apt-get install -y python\${PYTHON_VERSION} python3-pip python\${PYTHON_VERSION}-dev `],
+[` `],
+[`# Validate installed Python version `],
+[`RUN python\${PYTHON_VERSION} --version && \\ `],
+[`curl -sS https://bootstrap.pypa.io/get-pip.py | python\${PYTHON_VERSION} `],
+[` `],
+[`# Install Python Pip `],
+[`RUN python\${PYTHON_VERSION} -m pip install pip --upgrade pip `],
+[`RUN pip3 --version `],
+[` `],
+[`RUN ln -fs /usr/share/zoneinfo/\${DEFAULT_TIMEZONE} /etc/localtime `],
+[` `],
+[`RUN apt clean `],
+[` `],
+[`# Python GDAL installation `],
+[`RUN pip3 uninstall -y GDAL \\ `],
+[`&& pip3 install numpy==1.26.1 \\ `],
+[`&& pip3 install --upgrade --no-cache-dir setuptools wheel \\ `],
+[`&& pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="-I/usr/include/gdal" --no-binary :all \\ `],
+[`&& apt install -y python3-gdal `],
+[` `],
+[`# Verify GDAL installation `],
+[`RUN ogrinfo --version \\ `],
+[`&& python\${PYTHON_VERSION} -c "from osgeo import gdal; print(gdal.__version__);" `],
+[` `],
+[`ENV PYTHONPATH "\${PYTHONPATH}:/app/" `],
+[` `],
+[`ARG CPLUS_INCLUDE_PATH=/usr/include/gdal `],
+[`ARG C_INCLUDE_PATH=/usr/include/gdal `],
+[` `],
+[`ENV GDAL_DATA=/usr/share/gdal/ `],
+[` `],
+[`RUN echo 'GDAL \${GDAL_VERSION} container has been built successfully' `],
+        ];
+            let dockerfileContent = ""
+            for (var i =0; i<dockerfileContentArr.length; i++) {
+                let stmt = dockerfileContentArr[i];
+                dockerfileContent += stmt + '</br>';
+            }
+            let outputText = document.getElementById('outputText')
+            outputText.innerHTML = dockerfileContent;
+            document.getElementById('copyButton').addEventListener('click', function () {
+                copyToClipboard(outputText.innerText);
+            });
+        });
+    </script>
+</body>
+
+</html>
